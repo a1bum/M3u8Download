@@ -36,6 +36,16 @@ def make_sum():
         ts_num += 1
 
 
+def shell_run_cmd_block(cmd):
+    p = subprocess.Popen(cmd,
+                         shell=True,
+                         stdout=sys.stdout,
+                         stderr=sys.stderr,
+                         )
+    p.wait()
+    logger.info('cmd ret=%d' % p.returncode)
+
+
 class M3u8Download:
     """
     :param url: 完整的m3u8文件链接 如"https://www.bilibili.com/example/index.m3u8"
@@ -62,7 +72,8 @@ class M3u8Download:
         urllib3.disable_warnings()
 
         self.get_m3u8_info(self._url, self._num_retries)
-        logger.info('Downloading: %s' % self._name, 'Save path: %s' % self._file_path, sep='\n')
+        logger.info('Downloading: %s' % self._name)
+        logger.info('Save path: %s' % self._file_path)
         with ThreadPoolExecutorWithQueueSizeLimit(self._max_workers) as pool:
             for k, ts_url in enumerate(self._ts_url_list):
                 pool.submit(self.download_ts, ts_url, os.path.join(self._file_path, str(k)), self._num_retries)
@@ -192,15 +203,6 @@ class M3u8Download:
     run cmd
     '''
 
-    def shell_run_cmd_block(self, cmd):
-        p = subprocess.Popen(cmd,
-                             shell=True,
-                             stdout=sys.stdout,
-                             stderr=sys.stderr,
-                             )
-        p.wait()
-        logger.info('cmd ret=%d' % p.returncode)
-
     def output_mp4(self):
         """
         合并.ts文件，输出mp4格式视频，需要ffmpeg
@@ -209,7 +211,7 @@ class M3u8Download:
             self._file_path, self._name)
         # os.system(cmd)
         logger.info(cmd)
-        self.shell_run_cmd_block(cmd)
+        shell_run_cmd_block(cmd)
 
     def delete_file(self):
         file = os.listdir(self._file_path)
@@ -220,6 +222,9 @@ class M3u8Download:
 
 
 def proc(url_list, name_list):
+    """
+    多线程处理程序，调用 m3u8download 下载指定视频文件
+    """
     sta = len(url_list) == len(name_list)
     for i, u in enumerate(url_list):
         M3u8Download(u,
@@ -232,10 +237,16 @@ def proc(url_list, name_list):
 
 
 def is_command_installed(command):
+    """
+    判断当前操作系统是否安装了 ffmpeg
+    """
     return shutil.which(command) is not None
 
 
 def command_installer(command):
+    """
+    根据当前操作系统类型安装 ffmpeg
+    """
     operating_package_manager = {
         'Linux': 'apt',
         'Windows': 'winget',
