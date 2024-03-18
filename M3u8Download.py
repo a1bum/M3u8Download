@@ -1,8 +1,8 @@
 # _*_ coding: utf-8 _*_
-# _*_ author: anwenzen _*_
-
+import logging
 import os
 import re
+import shutil
 import sys
 import queue
 import base64
@@ -12,6 +12,10 @@ import urllib3
 import subprocess
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
+
+
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+logger = logging.getLogger('M3u8Download')
 
 
 class ThreadPoolExecutorWithQueueSizeLimit(ThreadPoolExecutor):
@@ -58,14 +62,14 @@ class M3u8Download:
         urllib3.disable_warnings()
 
         self.get_m3u8_info(self._url, self._num_retries)
-        print('Downloading: %s' % self._name, 'Save path: %s' % self._file_path, sep='\n')
+        logger.info('Downloading: %s' % self._name, 'Save path: %s' % self._file_path, sep='\n')
         with ThreadPoolExecutorWithQueueSizeLimit(self._max_workers) as pool:
             for k, ts_url in enumerate(self._ts_url_list):
                 pool.submit(self.download_ts, ts_url, os.path.join(self._file_path, str(k)), self._num_retries)
         if self._success_sum == self._ts_sum:
             self.output_mp4()
             self.delete_file()
-            print(f"Download successfully --> {self._name}")
+            logger.info(f"Download successfully --> {self._name}")
 
     def get_m3u8_info(self, m3u8_url, num_retries):
         """
@@ -89,7 +93,7 @@ class M3u8Download:
                     m3u8_text_str = res.text
                     self.get_ts_url(m3u8_text_str)
         except Exception as e:
-            print(e)
+            logger.info(e)
             if num_retries > 0:
                 self.get_m3u8_info(m3u8_url, num_retries - 1)
 
@@ -177,32 +181,34 @@ class M3u8Download:
                     f.write(res.content)
             return f'{key_line.split(mid_part)[0]}URI="./{self._name}/key"{key_line.split(mid_part)[-1]}'
         except Exception as e:
-            print(e)
+            logger.info(e)
             if os.path.exists(os.path.join(self._file_path, 'key')):
                 os.remove(os.path.join(self._file_path, 'key'))
-            print("加密视频,无法加载key,揭秘失败")
+            logger.info("加密视频,无法加载key,揭秘失败")
             if num_retries > 0:
                 self.download_key(key_line, num_retries - 1)
-                
+
     '''
     run cmd
     '''
+
     def shell_run_cmd_block(self, cmd):
         p = subprocess.Popen(cmd,
-                         shell=True,
-                         stdout=sys.stdout,
-                         stderr=sys.stderr,
-                         )
+                             shell=True,
+                             stdout=sys.stdout,
+                             stderr=sys.stderr,
+                             )
         p.wait()
-        print('cmd ret=%d' % p.returncode)
+        logger.info('cmd ret=%d' % p.returncode)
 
     def output_mp4(self):
         """
         合并.ts文件，输出mp4格式视频，需要ffmpeg
         """
-        cmd = 'ffmpeg -allowed_extensions ALL -i "%s.m3u8" -acodec copy -vcodec copy -f mp4 %s.mp4' % (self._file_path, self._name)
+        cmd = 'ffmpeg -allowed_extensions ALL -i "%s.m3u8" -acodec copy -vcodec copy -f mp4 %s.mp4' % (
+            self._file_path, self._name)
         # os.system(cmd)
-        print(cmd)
+        logger.info(cmd)
         self.shell_run_cmd_block(cmd)
 
     def delete_file(self):
@@ -211,8 +217,8 @@ class M3u8Download:
             os.remove(os.path.join(self._file_path, item))
         os.removedirs(self._file_path)
         os.remove(self._file_path + '.m3u8')
-        
-        
+
+
 def proc(url_list, name_list):
     sta = len(url_list) == len(name_list)
     for i, u in enumerate(url_list):
@@ -224,17 +230,40 @@ def proc(url_list, name_list):
                      )
     exit()
 
+
+def is_command_installed(command):
+    return shutil.which(command) is not None
+
+
+def command_installer(command):
+    operating_package_manager = {
+        'Linux': 'apt',
+        'Windows': 'winget',
+        'Darwin': 'brew',
+    }
+    host_system = platform.system()
+    cmd = f"{operating_package_manager[host_system]} install {command}"
+    logger.info(
+        f"Inspect your system is '{host_system}', You can run command '{cmd}' \
+          or visit 'https://github.com/GyanD/codexffmpeg/releases/' to install this package")
+    user_choice = input('Do you want to install now? [y/N]').lower()
+    if user_choice != 'y':
+        exit(1)
+    os.system(cmd)
+
+
 if __name__ == "__main__":
+    if not is_command_installed('ffmpeg'):
+        logger.error("'ffmpeg' command not found")
+        command_installer('ffmpeg')
     while True:
         url_list = input("输入url，若同时输入多个url时要用|分开：").split('|')
         name_list = []
         for url in url_list:
             name = os.path.basename(url)
-            file,ext = os.path.splitext(name)
+            file, ext = os.path.splitext(name)
             name_list.append(file)
         # 如果M3U8_URL的数量 ≠ SAVE_NAME的数量
         # 下载一部电视剧时，只需要输入一个name就可以了
         p = multiprocessing.Process(target=proc, args=(url_list, name_list))
         p.start()
-        
-    
