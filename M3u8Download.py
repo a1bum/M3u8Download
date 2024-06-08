@@ -267,14 +267,13 @@ if __name__ == "__main__":
     if not is_command_installed('ffmpeg'):
         logger.error("'ffmpeg' command not found")
         command_installer('ffmpeg')
-    while True:
-        url_list = input("输入url，若同时输入多个url时要用|分开：").split('|')
-        name_list = []
-        for url in url_list:
-            name = os.path.basename(url)
-            file, ext = os.path.splitext(name)
-            name_list.append(file)
-        # 如果M3U8_URL的数量 ≠ SAVE_NAME的数量
-        # 下载一部电视剧时，只需要输入一个name就可以了
-        p = multiprocessing.Process(target=proc, args=(url_list, name_list))
-        p.start()
+    url_list = input("输入url，若同时输入多个url时要用|分开：").split('|')
+    name_list = []
+    for url in url_list:
+        name = os.path.basename(url)
+        file, ext = os.path.splitext(name)
+        name_list.append(file)
+    # 如果M3U8_URL的数量 ≠ SAVE_NAME的数量
+    # 下载一部电视剧时，只需要输入一个name就可以了
+    p = multiprocessing.Process(target=proc, args=(url_list, name_list))
+    p.start()
